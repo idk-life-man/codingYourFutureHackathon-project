@@ -1,28 +1,30 @@
-const express = require("express")
-const http = require("http")
+const express = require('express')
 const app = express()
-const server = http.createServer(app)
-const io = require("socket.io")(server, {
-	cors: {
-		origin: "http://localhost:3000",
-		methods: [ "GET", "POST" ]
-	}
+const server = require('http').Server(app)
+const io = require('socket.io')(server)
+const { v4: uuidV4 } = require('uuid')
+
+
+app.set('view engine', 'ejs')
+app.use(express.static('public'))
+
+app.get('/', (req, res) => {
+    res.redirect(`/${uuidV4()}`)
 })
 
-io.on("connection", (socket) => {
-	socket.emit("me", socket.id)
-
-	socket.on("disconnect", () => {
-		socket.broadcast.emit("callEnded")
-	})
-
-	socket.on("callUser", (data) => {
-		io.to(data.userToCall).emit("callUser", { signal: data.signalData, from: data.from, name: data.name })
-	})
-
-	socket.on("answerCall", (data) => {
-		io.to(data.to).emit("callAccepted", data.signal)
-	})
+app.get('/:room', (req, res) => {
+    res.render('room', { roomId: req.params.room })
 })
 
-server.listen(5000, () => console.log("server is running on port 5000"))
+io.on('connection', socket => {
+    socket.on('join-room', (roomId, userId) => {
+        socket.join(roomId)
+        socket.to(roomId).broadcast.emit('user-connected', userId)
+
+        socket.on('disconnect', () => {
+            socket.to(roomId).broadcast.emit('user-disconnected', userId)
+        })
+    })
+  })
+
+server.listen(3000)
